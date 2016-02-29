@@ -21,6 +21,31 @@ select.qb-datetime-select {
   margin-left: 5px;
 }
 
+div.qb-simple-entry {
+  padding: 2.5px 0px;
+  display: block;
+}
+
+div.qb-simple-entry .qb-input {
+  margin-right: 0px;
+}
+
+span.qb-filter-name {
+  padding: 5px;
+  /* I have no idea why the following gives the correct alignment but e.g.
+   * "baseline" doesn't, but hey, it works. */
+  vertical-align: sub;
+}
+
 ul.qb-ul {
   list-style-type: none;
+}
+
+/* override some weird stuff from the theme */
+div.query-builder .btn-group::before, div.qb-simple-entry .btn-group::after {
+  display: inherit;
+}
+
+div.query-builder .btn-group > .btn {
+  float: none;
 }

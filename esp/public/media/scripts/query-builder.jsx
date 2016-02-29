@@ -77,6 +77,13 @@ var QueryBuilder = React.createClass({
     }),
   },
 
+  getInitialState: function () {
+    return {
+      // TODO(benkraft): use simple if the query can be expressed simply.
+      simple: !this.props.query,
+    }
+  },
+
   /**
    * If we just mounted, set up the initial query from this.props.query.
    *
@@ -92,15 +99,11 @@ var QueryBuilder = React.createClass({
   },
 
   asJSON: function () {
-    // TODO(benkraft): this pattern of using refs to access the child's asJSON
-    // and fromJSON might not work in React 0.14; figure out another way to do
-    // it, probably by storing all the state on this component and propagating
-    // everything down.
-    return this.refs.queryNode.asJSON();
+    return this.refs.queryRoot.asJSON();
   },
 
   fromJSON: function (data) {
-    return this.refs.queryNode.fromJSON(data);
+    return this.refs.queryRoot.fromJSON(data);
   },
 
   /**
@@ -151,11 +154,21 @@ var QueryBuilder = React.createClass({
   },
 
   render: function () {
+    // TODO(benkraft): button to switch from simple to advanced view.
+    if (this.state.simple) {
+      var queryRoot = <SimpleQueryRoot
+        ref="queryRoot"
+        filters={this.props.spec.filters}
+        filterNames={this.props.spec.filterNames} />;
+    } else {
+      var queryRoot = <QueryNode
+        ref="queryRoot"
+        filters={this.allFilters()}
+        filterNames={this.allFilterNames()} />;
+    }
     return <div className="query-builder">
       Find {this.props.spec.englishName}&hellip;
-      <QueryNode ref="queryNode"
-                 filters={this.allFilters()}
-                 filterNames={this.allFilterNames()} />
+      {queryRoot}
       <button onClick={this.submit} className="qb-input btn btn-primary">
         Search
       </button>
@@ -172,6 +185,102 @@ var QueryBuilder = React.createClass({
     </div>;
   },
 });
+
+var SimpleQueryRoot = React.createClass({
+  propTypes: {
+    filterNames: React.PropTypes.arrayOf(React.PropTypes.string).isRequired,
+    filters: React.PropTypes.objectOf(React.PropTypes.shape({
+      name: React.PropTypes.string.isRequired,
+      title: React.PropTypes.string.isRequired,
+      inputs: React.PropTypes.arrayOf(React.PropTypes.shape({
+        reactClass: React.PropTypes.string.isRequired,
+      })),
+    })).isRequired,
+  },
+
+  getInitialState: function () {
+    return {
+      error: null,
+    };
+  },
+
+  asJSON: function () {
+    var values = _.filter(_.map(
+      this.props.filterNames,
+      function (filterName) {
+        return this.refs[filterName].asJSON();
+      }.bind(this)));
+    if (values.length == 0) {
+      this.setState({error: "You must select at least one filter."});
+      throw new BuildQueryError();
+    } else if (values.length == 1) {
+      // May as well simplify the query if it's just a single filter.
+      this.setState({error: null});
+      return values[0];
+    } else {
+      this.setState({error: null});
+      return {
+        filter: 'and',
+        negated: false,
+        values: values,
+      };
+    }
+  },
+
+  render: function() {
+    var entries = _.map(
+      this.props.filterNames,
+      function (filterName) {
+        var filter = this.props.filters[filterName];
+        return <SimpleQueryEntry
+          key={filterName} ref={filterName} filter={filter} />;
+      }.bind(this));
+    return <div>
+      <span className="error">{this.state.error}</span>
+      {entries}
+    </div>;
+  }
+});
+
+var SimpleQueryEntry = React.createClass({
+  propTypes: {
+    filter: React.PropTypes.shape({
+      name: React.PropTypes.string.isRequired,
+      title: React.PropTypes.string.isRequired,
+      inputs: React.PropTypes.arrayOf(React.PropTypes.shape({
+        reactClass: React.PropTypes.string.isRequired,
+      })),
+    }).isRequired,
+  },
+
+  asJSON: function () {
+    if ($j(React.findDOMNode(this.refs.ignore)).hasClass("active")) {
+      // Technically kinda violates the spec, but we'll handle it in
+      // SimpleQueryRoot.
+      return null;
+    } else {
+      return {
+        filter: this.props.filter.name,
+        negated: $j(React.findDOMNode(this.refs.without)).hasClass("active"),
+        values: this.refs.filter.asJSON(),
+      }
+    }
+  },
+
+  render: function () {
+    return <div className="qb-simple-entry">
+      <span className="btn-group" data-toggle="buttons-radio">
+        <button className="btn qb-input active" ref="ignore">&nbsp;</button>
+        <button className="btn qb-input" ref="with">with</button>
+        <button className="btn qb-input" ref="without">without</button>
+      </span>
+      <span className="qb-filter-name">{this.props.filter.title}</span>
+      <Filter ref="filter" filter={this.props.filter} />
+    </div>;
+  }
+});
+
+
 
 /**
  * A single node of the query builder, containing a single filter or boolean
